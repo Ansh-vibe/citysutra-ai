@@ -4,7 +4,7 @@ import { buildSnapshotContext } from "@/lib/snapshot";
 import { buildActions, evaluateInteractions } from "@/lib/recommendations";
 import { computePriority } from "@/lib/priority";
 import { fetchAirContext, fetchWeatherContext } from "@/lib/providers/openMeteo";
-import { getRepository } from "./repository";
+import { getPreviewRepository, getRepository } from "./repository";
 import type { DimensionId, DimensionValue, RecommendedAction } from "@/lib/types";
 
 /**
@@ -44,8 +44,13 @@ export interface Snapshot {
 
 export async function buildSnapshot(input: SnapshotInput): Promise<Snapshot> {
   const nowIso = new Date().toISOString();
-  const repo = getRepository();
-  await repo.ensureSeeded();
+  let repo = getRepository();
+  try {
+    await repo.ensureSeeded();
+  } catch {
+    repo = getPreviewRepository();
+    await repo.ensureSeeded();
+  }
 
   const [air, weather, incidents, actionStatuses] = await Promise.all([
     fetchAirContext(input.lat, input.lon),
