@@ -442,16 +442,68 @@ class DynamoRepository implements IncidentRepository {
   }
 }
 
+/* ------------------------------ preview fallback ------------------------- */
+
+class InMemoryRepository implements IncidentRepository {
+  readonly mode = "local-postgres" as const;
+  private incidents: Incident[] = [];
+  private actions: Record<string, ActionStatus> = {};
+
+  async listIncidents(f?: { track?: string; status?: string; q?: string; limit?: number }) {
+    let result = [...this.incidents].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    if (f?.track) result = result.filter((i) => i.track === f.track);
+    if (f?.status) result = result.filter((i) => i.status === f.status);
+    if (f?.q) {
+      const q = f.q.toLowerCase();
+      result = result.filter((i) => `${i.title} ${i.locationLabel} ${i.description}`.toLowerCase().includes(q));
+    }
+    return result.slice(0, f?.limit ?? 100);
+  }
+
+  async getIncident(id: string) { return this.incidents.find((i) => i.incidentId === id) ?? null; }
+
+  async createIncident(input: IncidentCreateInput) {
+    const now = new Date().toISOString();
+    const incident: Incident = { incidentId: newId("inc"), category: input.category, track: trackFor(input.category), title: input.title, description: input.description, latitude: input.latitude, longitude: input.longitude, locationLabel: input.locationLabel, wardId: input.wardId, severity: input.severity, status: "reported", evidenceType: input.evidenceType, sourceName: input.sourceName, confidence: input.confidence, isDemo: input.isDemo, photoRef: input.photoRef, createdAt: now, updatedAt: now };
+    this.incidents.push(incident);
+    return incident;
+  }
+
+  async updateIncidentStatus(id: string, status: IncidentStatus, rejectReason?: string) {
+    const incident = await this.getIncident(id);
+    if (!incident) throw new Error("not_found");
+    Object.assign(incident, { status, rejectReason, updatedAt: new Date().toISOString() });
+    return incident;
+  }
+
+  async countIncidents() { return this.incidents.length; }
+  async ensureSeeded() { if (!this.incidents.length) this.incidents = makeDemoIncidents(new Date()); }
+  async resetDemo() { this.incidents = makeDemoIncidents(new Date()); this.actions = {}; return { seeded: this.incidents.length }; }
+  async listActionStatuses() { return { ...this.actions }; }
+  async upsertActionStatus(actionId: string, status: ActionStatus) { this.actions[actionId] = status; }
+}
+
 /* ------------------------------ selection -------------------------------- */
 
 let localRepo: LocalPostgresRepository | null = null;
+let memoryRepo: InMemoryRepository | null = null;
 let dynamoRepo: DynamoRepository | null = null;
+
+export function getPreviewRepository(): IncidentRepository {
+  if (!memoryRepo) memoryRepo = new InMemoryRepository();
+  return memoryRepo;
+}
 
 export function getRepository(): IncidentRepository {
   if (process.env.REPO_MODE === "dynamodb" && process.env.DYNAMO_TABLE) {
     if (!dynamoRepo) dynamoRepo = new DynamoRepository();
     return dynamoRepo;
   }
+  if (!process.env.DATABASE_URL) {
+    if (!memoryRepo) memoryRepo = new InMemoryRepository();
+    return memoryRepo;
+  }
   if (!localRepo) localRepo = new LocalPostgresRepository();
   return localRepo;
 }
+

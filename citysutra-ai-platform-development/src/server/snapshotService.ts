@@ -4,7 +4,8 @@ import { buildSnapshotContext } from "@/lib/snapshot";
 import { buildActions, evaluateInteractions } from "@/lib/recommendations";
 import { computePriority } from "@/lib/priority";
 import { fetchAirContext, fetchWeatherContext } from "@/lib/providers/openMeteo";
-import { getRepository } from "./repository";
+import { getPreviewRepository, getRepository } from "./repository";
+import type { IncidentRepository } from "./repository";
 import type { DimensionId, DimensionValue, RecommendedAction } from "@/lib/types";
 
 /**
@@ -44,15 +45,36 @@ export interface Snapshot {
 
 export async function buildSnapshot(input: SnapshotInput): Promise<Snapshot> {
   const nowIso = new Date().toISOString();
-  const repo = getRepository();
-  await repo.ensureSeeded();
+  let repo = getRepository();
+  try {
+    await repo.ensureSeeded();
+  } catch {
+    repo = getPreviewRepository();
+    await repo.ensureSeeded();
+  }
 
-  const [air, weather, incidents, actionStatuses] = await Promise.all([
-    fetchAirContext(input.lat, input.lon),
-    fetchWeatherContext(input.lat, input.lon),
-    repo.listIncidents({ limit: 200 }),
-    repo.listActionStatuses(),
-  ]);
+  let air: Awaited<ReturnType<typeof fetchAirContext>>;
+  let weather: Awaited<ReturnType<typeof fetchWeatherContext>>;
+  let incidents: Awaited<ReturnType<IncidentRepository["listIncidents"]>>;
+  let actionStatuses: Awaited<ReturnType<IncidentRepository["listActionStatuses"]>>;
+
+  try {
+    [air, weather, incidents, actionStatuses] = await Promise.all([
+      fetchAirContext(input.lat, input.lon),
+      fetchWeatherContext(input.lat, input.lon),
+      repo.listIncidents({ limit: 200 }),
+      repo.listActionStatuses(),
+    ]);
+  } catch {
+    repo = getPreviewRepository();
+    await repo.ensureSeeded();
+    [air, weather, incidents, actionStatuses] = await Promise.all([
+      fetchAirContext(input.lat, input.lon),
+      fetchWeatherContext(input.lat, input.lon),
+      repo.listIncidents({ limit: 200 }),
+      repo.listActionStatuses(),
+    ]);
+  }
 
   const ctx = buildSnapshotContext(air, weather, incidents, {
     simulatedAirUsAqi: input.demoAir ? SIMULATED_US_AQI : null,
