@@ -1,0 +1,18 @@
+# AWS Amplify Hosting — Next.js (App Router) build configuration.
+# Amplify detects Next.js and deploys app + API routes as serverless functions.
+# Set these in the Amplify console (never commit secrets):
+#   NEXT_PUBLIC_APP_URL  → the Amplify domain (used for CORS allow-list)
+#   REPO_MODE            → dynamodb (AWS mode) | local (dev default)
+#   DYNAMO_TABLE         → citysutra-<env> from the SAM stack outputs
+#   AWS_REGION           → e.g. ap-south-1
+version: 2
+build:
+  runs: npx
+  steps:
+    - install: npm ci
+    - cache: node_modules
+    - build: npm run build
+  artifacts:
+    files:
+      - "**/*"
+    baseDirectory: .next

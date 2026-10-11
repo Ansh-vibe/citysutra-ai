@@ -1,0 +1,189 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  CitySutra AI serverless backend — Amazon API Gateway (HTTP API) + AWS Lambda
+  (serverless processing, risk analysis, event handling) + Amazon DynamoDB
+  (incidents, risk indicators & alert records) + Amazon S3 (environmental
+  datasets & evidence files) + Amazon CloudWatch (logs, alarms, dashboard).
+  Amazon Bedrock is an OPTIONAL enhancement (enabled via environment on the
+  frontend runtime role — no resource created here).
+
+Parameters:
+  Env:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+  AllowedOrigin:
+    Type: String
+    Default: "https://YOUR-AMPLIFY-APP.amplifyapp.com"
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: nodejs20.x
+    Tracing: Active
+
+Resources:
+  # ---- Amazon DynamoDB: incidents + risk indicators + alert records ----
+  CitySutraTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub citysutra-${Env}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: statusIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: pk
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+        StreamEnabled: false
+
+  # ---- Amazon S3: environmental datasets, weather exports, evidence files ----
+  CitySutraEvidenceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub citysutra-evidence-${Env}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireEvidence
+            Status: Enabled
+            Prefix: evidence/
+            ExpirationInDays: 90
+
+  # ---- CloudWatch: log group + operational dashboard ----
+  CitySutraLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/citysutra-${Env}
+      RetentionInDays: 14
+      LogsRetentionInDays: 14
+
+  CitySutraDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub citysutra-${Env}
+      DashboardBody:
+        !Sub |
+          {
+            "widgets": [
+              {
+                "type": "metric", "x": 0, "y": 0, "width": 6, "height": 6,
+                "properties": {
+                  "title": "Lambda errors & invocations",
+                  "metrics": [
+                    ["AWS/Lambda", "Errors", "FunctionName", "${CitySutraFunction}"],
+                    ["AWS/Lambda", "Invocations", "FunctionName", "${CitySutraFunction}"]
+                  ],
+                  "view": "timeSeries", "stacked": false
+                }
+              },
+              {
+                "type": "metric", "x": 6, "y": 0, "width": 6, "height": 6,
+                "properties": {
+                  "title": "Lambda duration & throttles",
+                  "metrics": [
+                    ["AWS/Lambda", "Duration", "FunctionName", "${CitySutraFunction}"],
+                    ["AWS/Lambda", "Throttles", "FunctionName", "${CitySutraFunction}"]
+                  ],
+                  "view": "timeSeries"
+                }
+              },
+              {
+                "type": "metric", "x": 0, "y": 6, "width": 12, "height": 6,
+                "properties": {
+                  "title": "API Gateway traffic & errors",
+                  "metrics": [
+                    ["AWS/ApiGateway", "Count", "ApiName", "${CitySutraApi}"],
+                    ["AWS/ApiGateway", "4XXError", "ApiName", "${CitySutraApi}"],
+                    ["AWS/ApiGateway", "5XXError", "ApiName", "${CitySutraApi}"]
+                  ],
+                  "view": "timeSeries", "stacked": false
+                }
+              }
+            ]
+          }
+
+  # ---- Amazon API Gateway (HTTP API) ----
+  CitySutraApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      Name: !Sub citysutra-${Env}
+      AccessLogFormat:
+        jsonParse("$context.requestId")
+      StageName: !Sub ${Env}
+      DefaultRouteSettings:
+        # basic request throttling at the gateway
+        ThrottlingBurstLimit: 30
+        ThrottlingRateLimit: 15
+
+  # ---- AWS Lambda: serverless processing, risk analysis, event handling ----
+  CitySutraFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub citysutra-${Env}
+      Handler: handler.handler
+      CodeUri: lambda/
+      Environment:
+        Variables:
+          DYNAMO_TABLE: !Ref CitySutraTable
+          S3_BUCKET: !Ref CitySutraEvidenceBucket
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+      LoggingConfig:
+        LogGroup: !Ref CitySutraLogGroup
+      Policies:
+        # least privilege: only this app's table + its own evidence bucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CitySutraTable
+        - S3CrudPolicy:
+            BucketName: !Ref CitySutraEvidenceBucket
+      Events:
+        Proxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref CitySutraApi
+            Path: /{proxy+}
+            Method: ANY
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway (HTTP API) endpoint
+    Value: !Sub https://${CitySutraApi}.execute-api.${AWS::Region}.amazonaws.com/${Env}
+  TableName:
+    Description: DynamoDB table (incidents + alerts)
+    Value: !Ref CitySutraTable
+  EvidenceBucket:
+    Description: S3 bucket for datasets & evidence
+    Value: !Ref CitySutraEvidenceBucket
+  DashboardName:
+    Description: CloudWatch dashboard
+    Value: !Sub citysutra-${Env}

@@ -1,0 +1,16 @@
+{
+  "name": "citysutra-lambda",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CitySutra AI serverless backend — API Gateway + Lambda + DynamoDB + S3",
+  "main": "handler.mjs",
+  "scripts": {
+    "deploy-prepare": "npm install --omit=dev"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.600.0",
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@aws-sdk/util-dynamodb": "^3.600.0"
+  }
+}

@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+
+  /* white paper / black ink */
+  --color-canvas: #ffffff;
+  --color-panel: #ffffff;
+  --color-panel-deep: #f2f2ef;
+  --color-block: #0a0a0a;
+
+  --color-ink: #0a0a0a;
+  --color-ink-soft: #2e2e2e;
+  --color-ink-faint: #6f6f6f;
+  --color-line: #0a0a0a;
+  --color-line-strong: #0a0a0a;
+
+  --color-teal: #0f766e;
+  --color-teal-deep: #0b5a54;
+  --color-teal-soft: #e7f4f1;
+  --color-amber: #b45309;
+  --color-amber-soft: #f9efdd;
+  --color-coral: #cf4430;
+  --color-coral-deep: #a53322;
+  --color-coral-soft: #fae9e5;
+  --color-indigo2: #4356c6;
+  --color-indigo-soft: #e9ebfa;
+  --color-sky: #0284c7;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #ffffff;
+  color: #0a0a0a;
+  font-feature-settings: "ss01" on, "cv05" on;
+}
+
+::selection {
+  background: #0a0a0a;
+  color: #ffffff;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #0a0a0a transparent;
+}
+
+/* surfaces */
+@utility card {
+  background: #ffffff;
+  border: 1px solid #0a0a0a;
+  border-radius: 2px;
+}
+@utility hard {
+  box-shadow: 4px 4px 0 0 #0a0a0a;
+}
+@utility hard-sm {
+  box-shadow: 3px 3px 0 0 #0a0a0a;
+}
+@utility hard-hover {
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 4px 4px 0 0 #0a0a0a;
+}
+@utility ink-block {
+  background: #0a0a0a;
+  color: #ffffff;
+}
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+@utility tick-label {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+@utility focus-ring {
+  outline: none;
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid #0a0a0a;
+  outline-offset: 2px;
+}
+
+/* Leaflet */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #ececea;
+  border-radius: 2px;
+}
+.leaflet-popup-content-wrapper {
+  border-radius: 2px;
+  border: 1px solid #0a0a0a;
+}
+.cs-marker {
+  display: grid;
+  place-items: center;
+  border-radius: 2px;
+  border: 2px solid #ffffff;
+  box-shadow: 2px 2px 0 rgba(10, 10, 10, 0.55);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+}
