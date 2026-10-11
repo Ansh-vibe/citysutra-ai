@@ -7,7 +7,7 @@ import {
   throttled,
 } from "@/server/apiUtils";
 import { incidentCreateSchema, incidentsQuerySchema } from "@/lib/schemas";
-import { getRepository } from "@/server/repository";
+import { getPreviewRepository, getRepository } from "@/server/repository";
 
 export const dynamic = "force-dynamic";
 
@@ -18,8 +18,14 @@ export async function GET(req: Request) {
   );
   if (!parsed.success) return jsonError(422, "Invalid query parameters");
   try {
-    await getRepository().ensureSeeded();
-    const incidents = await getRepository().listIncidents(parsed.data);
+    let repo = getRepository();
+    try {
+      await repo.ensureSeeded();
+    } catch {
+      repo = getPreviewRepository();
+      await repo.ensureSeeded();
+    }
+    const incidents = await repo.listIncidents(parsed.data);
     return Response.json({ ok: true, incidents, count: incidents.length });
   } catch (e) {
     return jsonError(500, "Failed to load incidents", e instanceof Error ? e.message : "unknown");
