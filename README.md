@@ -814,7 +814,7 @@ Built as a prototype exploring how environmental data, deterministic
 risk analysis, explainable recommendations, geospatial interfaces,
 and cloud infrastructure can support better urban decision-making.
 
-- **Live Demo:** https://citysutra.vercel.app/
+- **Live Demo:** https://citysutra-ai.vercel.app/
 - **GitHub Repository:** https://github.com/Ansh-vibe/citysutra-ai
 - **Application Source:** [`citysutra-ai-platform-development/`](./citysutra-ai-platform-development)
 
